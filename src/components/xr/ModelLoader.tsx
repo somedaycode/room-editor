@@ -76,6 +76,15 @@ function ModelLoader({
         return;
       }
       
+      // 높이 차이가 충분히 크면 충돌 무시 (Y축으로 충분히 위에 있는 경우)
+      if (rootRef.current && e.body?.position) {
+        const heightDifference = Math.abs(rootRef.current.position.y - e.body.position.y);
+        if (heightDifference > 1.0) {
+          console.log('높이 차이로 충돌 무시:', heightDifference);
+          return;
+        }
+      }
+      
       console.log('충돌 시작:', e.body?.name, e.target?.name);
       if (isDragging && transformMode === 'translate') {
         setHasCollision(true);
@@ -266,7 +275,7 @@ function ModelLoader({
       case 'translate':
         return { 
           showX: true, 
-          showY: false, // Y축(높이)은 비활성화하면 바닥에 붙인 상태로 드래그 가능 
+          showY: true, // Y축(높이) 활성화하여 위로 올릴 수 있게 함
           showZ: true 
         };
       case 'rotate':
@@ -284,7 +293,7 @@ function ModelLoader({
       default:
         return { 
           showX: true, 
-          showY: false, 
+          showY: true, // 기본값도 Y축(높이) 활성화
           showZ: true 
         };
     }
@@ -304,10 +313,14 @@ function ModelLoader({
       const isWall = object.name && object.name.startsWith('wall-');
       const isOtherModel = object.name && object.name.startsWith('model-') && object.name !== modelId.current;
       
-      // floor-main이 아닌 객체만 처리
+      // floor-main 제외 및 수직 위치에 따른 충돌 감지 제외
       if ((isWall || isOtherModel) && object.position && rootRef.current && object.name !== 'floor-main') {
         // 두 객체 간의 거리 계산
-        const distance = object.position.distanceTo(rootRef.current.position);
+        const distance = new ThreeVector3(
+          rootRef.current.position.x - object.position.x,
+          0, // Y축(높이)는 무시하고 평면상의 거리만 계산
+          rootRef.current.position.z - object.position.z
+        ).length();
         
         // 충돌 임계값 설정 (모델 크기에 따라 조정할 수 있음)
         let collisionThreshold = 1.5;
@@ -317,8 +330,12 @@ function ModelLoader({
           collisionThreshold = 2.0;
         }
         
-        if (distance < collisionThreshold) {
-          console.log('수동 충돌 감지:', object.name, '거리:', distance);
+        // Y축 높이에 따른 충돌 검사 추가
+        const heightDifference = Math.abs(rootRef.current.position.y - object.position.y);
+        const isHeightOverlapping = heightDifference < 1.0; // 높이 차이가 1.0 미만일 때만 충돌로 간주
+        
+        if (distance < collisionThreshold && isHeightOverlapping) {
+          console.log('수동 충돌 감지:', object.name, '거리:', distance, '높이 차이:', heightDifference);
           hasAnyCollision = true;
         }
       }
