@@ -13,10 +13,11 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
   const editMode = useEditorStore((state) => state.editMode);
   const setEditMode = useEditorStore((state) => state.setEditMode);
   
-  const [isAIMenuOpen, setIsAIMenuOpen] = useState(false);
+  const [isEditMenuOpen, setIsEditMenuOpen] = useState(false);
+  const [isRotateMenuOpen, setIsRotateMenuOpen] = useState(false);
   
-  // 모델 회전 핸들러 (90도 회전)
-  const handleRotate90 = () => {
+  // 모델 회전 핸들러 (지정된 각도만큼 회전)
+  const handleRotate = (degrees: number) => {
     if (!selectedInstanceId) return;
     
     const { instances, updateInstanceProperty } = useEditorStore.getState();
@@ -24,9 +25,13 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
     
     if (instance) {
       const currentRotation = [...instance.rotation];
-      currentRotation[1] = currentRotation[1] + Math.PI / 2; // Y축 기준 90도 회전
+      // 라디안으로 변환 (PI/180 * degrees)
+      currentRotation[1] = currentRotation[1] + (Math.PI / 180 * degrees);
       updateInstanceProperty(selectedInstanceId, 'rotation', currentRotation);
     }
+    
+    // 회전 메뉴 닫기
+    setIsRotateMenuOpen(false);
   };
 
   return (
@@ -38,55 +43,181 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
       
       {/* 에디팅 도구 */}
       <div className="flex items-center space-x-2">
-        <div className="flex bg-gray-100 rounded-md">
+        {/* 편집 모드 드롭다운 */}
+        <div className="relative">
           <button
-            className={`px-3 py-1 rounded-l-md ${
-              editMode === 'translate' ? 'bg-blue-600 text-white' : 'hover:bg-gray-200'
-            }`}
-            onClick={() => setEditMode('translate')}
-            title="이동"
+            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center space-x-1"
+            onClick={() => setIsEditMenuOpen(!isEditMenuOpen)}
+            title="편집 모드"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h10M7 16h10" />
+            {/* 현재 선택된 모드에 따라 아이콘 표시 */}
+            {editMode === 'combined' && (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+              </svg>
+            )}
+            {editMode === 'translate' && (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h10M7 16h10" />
+              </svg>
+            )}
+            {editMode === 'rotate' && (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            {editMode === 'scale' && (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">
+              {editMode === 'combined' && '이동 및 회전'}
+              {editMode === 'translate' && '이동'}
+              {editMode === 'rotate' && '회전'}
+              {editMode === 'scale' && '크기 조절'}
+            </span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          <button
-            className={`px-3 py-1 ${
-              editMode === 'rotate' ? 'bg-blue-600 text-white' : 'hover:bg-gray-200'
-            }`}
-            onClick={() => setEditMode('rotate')}
-            title="회전"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <button
-            className={`px-3 py-1 rounded-r-md ${
-              editMode === 'scale' ? 'bg-blue-600 text-white' : 'hover:bg-gray-200'
-            }`}
-            onClick={() => setEditMode('scale')}
-            title="크기 조절"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-            </svg>
-          </button>
+          
+          {/* 편집 모드 드롭다운 메뉴 */}
+          {isEditMenuOpen && (
+            <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 overflow-hidden">
+              <div className="py-1">
+                <button 
+                  className={`w-full px-4 py-2 text-left text-sm ${
+                    editMode === 'combined' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                  } flex items-center`}
+                  onClick={() => {
+                    setEditMode('combined');
+                    setIsEditMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                  </svg>
+                  이동 및 회전
+                </button>
+                <button 
+                  className={`w-full px-4 py-2 text-left text-sm ${
+                    editMode === 'translate' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                  } flex items-center`}
+                  onClick={() => {
+                    setEditMode('translate');
+                    setIsEditMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h10M7 16h10" />
+                  </svg>
+                  이동
+                </button>
+                <button 
+                  className={`w-full px-4 py-2 text-left text-sm ${
+                    editMode === 'rotate' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                  } flex items-center`}
+                  onClick={() => {
+                    setEditMode('rotate');
+                    setIsEditMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  회전
+                </button>
+                <button 
+                  className={`w-full px-4 py-2 text-left text-sm ${
+                    editMode === 'scale' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                  } flex items-center`}
+                  onClick={() => {
+                    setEditMode('scale');
+                    setIsEditMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                  </svg>
+                  크기 조절
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         
-        {/* 회전 버튼 */}
-        <button
-          className={`px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 ${
-            !selectedInstanceId ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-          onClick={handleRotate90}
-          disabled={!selectedInstanceId}
-          title="90도 회전"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-        </button>
+        {/* 회전 버튼 및 드롭다운 메뉴 */}
+        <div className="relative">
+          <button
+            className={`px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center ${
+              !selectedInstanceId ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            onClick={() => selectedInstanceId && setIsRotateMenuOpen(!isRotateMenuOpen)}
+            disabled={!selectedInstanceId}
+            title="회전 옵션"
+          >
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {/* 회전 드롭다운 메뉴 */}
+          {isRotateMenuOpen && selectedInstanceId && (
+            <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 overflow-hidden">
+              <div className="py-1">
+                <button 
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  onClick={() => handleRotate(-45)}
+                >
+                  <svg className="w-5 h-5 mr-2 transform -scale-x-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  45° 왼쪽으로
+                </button>
+                <button 
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  onClick={() => handleRotate(45)}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                  45° 오른쪽으로
+                </button>
+                <button 
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  onClick={() => handleRotate(-90)}
+                >
+                  <svg className="w-5 h-5 mr-2 transform -scale-x-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  90° 왼쪽으로
+                </button>
+                <button 
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  onClick={() => handleRotate(90)}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                  90° 오른쪽으로
+                </button>
+                <button 
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                  onClick={() => handleRotate(180)}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 17l-4 4m0 0l-4-4m4 4V3" />
+                  </svg>
+                  180° 회전
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         
         {/* 복제 및 삭제 버튼 */}
         <button

@@ -9,6 +9,7 @@ import { Mesh, Group, Vector3 as ThreeVector3, Quaternion, Euler, Raycaster } fr
 import { ModelInstance, Vector3 } from '../../types';
 import { TransformControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
+import CustomTransformControls from './CustomTransformControls';
 
 interface ModelLoaderProps {
   modelPath: string;
@@ -21,7 +22,7 @@ interface ModelLoaderProps {
   isLocked?: boolean;
   onClick?: () => void;
   onDragEnd?: (position: [number, number, number], rotation: [number, number, number], scale?: [number, number, number]) => void;
-  transformMode?: 'translate' | 'rotate' | 'scale';
+  transformMode?: 'translate' | 'rotate' | 'scale' | 'combined';
   onUpdateInstance?: (instanceId: string, updates: Partial<ModelInstance>) => void;
   instanceId?: string;
   enableSnapping?: boolean;
@@ -179,113 +180,19 @@ function ModelLoader({
     }
   }, [isSelected]);
   
-  // TransformControls 이벤트 처리
-  useEffect(() => {
-    if (isSelected && isDraggable && !isLocked && rootRef.current) {
-      const handleDragStart = () => {
-        setIsDragging(true);
-        setHasCollision(false);
-      };
-      
-      const handleDragEnd = () => {
-        setIsDragging(false);
-        
-        if (rootRef.current && onDragEnd) {
-          // 충돌이 있는 경우, 마지막 유효 위치로 복원
-          if (hasCollision && transformMode === 'translate') {
-            rootRef.current.position.set(
-              lastValidPosition.current[0],
-              lastValidPosition.current[1],
-              lastValidPosition.current[2]
-            );
-            
-            // 물리 객체도 마지막 유효 위치로 업데이트
-            api.position.set(
-              lastValidPosition.current[0],
-              lastValidPosition.current[1],
-              lastValidPosition.current[2]
-            );
-            
-            // 원래 색상으로 복원
-            if (modelRef.current) {
-              modelRef.current.traverse((child) => {
-                if (child instanceof Mesh && child.material) {
-                  if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => {
-                      mat.emissive?.set(isSelected ? 0x222222 : 0x000000);
-                    });
-                  } else {
-                    child.material.emissive?.set(isSelected ? 0x222222 : 0x000000);
-                  }
-                }
-              });
-            }
-            
-            setHasCollision(false);
-            
-            // 복원된 위치 정보로 이벤트 발생
-            onDragEnd(lastValidPosition.current, lastValidRotation.current, [
-              modelRef.current?.scale.x ?? scale[0],
-              modelRef.current?.scale.y ?? scale[1],
-              modelRef.current?.scale.z ?? scale[2]
-            ]);
-            
-            return;
-          }
-          
-          // 충돌이 없는 경우 현재 위치를 유효 위치로 업데이트
-          const newPosition: [number, number, number] = [
-            rootRef.current.position.x,
-            rootRef.current.position.y,
-            rootRef.current.position.z
-          ];
-          
-          const newRotation: [number, number, number] = [
-            rootRef.current.rotation.x,
-            rootRef.current.rotation.y,
-            rootRef.current.rotation.z
-          ];
-          
-          const newScale: [number, number, number] = [
-            modelRef.current?.scale.x ?? scale[0],
-            modelRef.current?.scale.y ?? scale[1],
-            modelRef.current?.scale.z ?? scale[2]
-          ];
-          
-          // 충돌이 없는 경우 현재 위치를 마지막 유효 위치로 저장
-          lastValidPosition.current = newPosition;
-          lastValidRotation.current = newRotation;
-          
-          // 물리 객체의 위치도 업데이트
-          api.position.set(newPosition[0], newPosition[1], newPosition[2]);
-          api.rotation.set(newRotation[0], newRotation[1], newRotation[2]);
-          
-          onDragEnd(newPosition, newRotation, newScale);
-        }
-      };
-      
-      return () => {
-        // 이벤트 리스너 제거
-      };
-    }
-  }, [isSelected, isDraggable, isLocked, onDragEnd, scale, hasCollision, transformMode, api]);
-  
-  // 모델 복제
-  const modelClone = gltf.scene.clone();
-  
   // 변환 모드에 따른 설정 구성
   const getTransformControlsConfig = () => {
     switch (transformMode) {
       case 'translate':
         return { 
           showX: true, 
-          showY: true, // Y축(높이) 활성화하여 위로 올릴 수 있게 함
+          showY: true, 
           showZ: true 
         };
       case 'rotate':
         return { 
           showX: false, 
-          showY: true, // 회전은 Y축만 사용하는 것이 가구 배치에 자연스러움
+          showY: true, 
           showZ: false 
         };
       case 'scale':
@@ -294,16 +201,130 @@ function ModelLoader({
           showY: true, 
           showZ: true 
         };
+      case 'combined':
+        return { 
+          showX: true, 
+          showY: true, 
+          showZ: true
+        };
       default:
         return { 
           showX: true, 
-          showY: true, // 기본값도 Y축(높이) 활성화
+          showY: true, 
           showZ: true 
         };
     }
   };
   
+  // 현재 변환 모드에 따른 설정
   const controlConfig = getTransformControlsConfig();
+  
+  // TransformControls 이벤트 핸들러
+  const handleMouseDown = () => {
+    console.log('드래그 시작');
+    setIsDragging(true);
+    
+    // 드래그 시작 시 충돌 상태 초기화
+    if (hasCollision) {
+      setHasCollision(false);
+    }
+    
+    // 드래그 시작 시 현재 위치를 기억
+    if (rootRef.current) {
+      lastValidPosition.current = [
+        rootRef.current.position.x,
+        rootRef.current.position.y,
+        rootRef.current.position.z
+      ];
+      lastValidRotation.current = [
+        rootRef.current.rotation.x,
+        rootRef.current.rotation.y,
+        rootRef.current.rotation.z
+      ];
+    }
+  };
+  
+  const handleChange = () => {
+    // 위치가 변경될 때마다 충돌 감지
+    if (transformMode === 'translate' || transformMode === 'combined') {
+      checkCollisions();
+    }
+  };
+  
+  const handleMouseUp = () => {
+    console.log('드래그 종료, 충돌 상태:', hasCollision);
+
+    // 마지막으로 충돌 상태 확인
+    const isColliding = checkCollisions();
+    
+    // 스냅 가이드 라인 숨기기
+    hideSnapLine();
+    
+    if (rootRef.current && onDragEnd) {
+      // 충돌이 있는 경우, 마지막 유효 위치로 복원
+      if ((hasCollision || isColliding) && (transformMode === 'translate' || transformMode === 'combined')) {
+        console.log('충돌로 인해 위치 복원:', lastValidPosition.current);
+        rootRef.current.position.set(
+          lastValidPosition.current[0],
+          lastValidPosition.current[1],
+          lastValidPosition.current[2]
+        );
+        
+        // 물리 객체도 업데이트
+        api.position.set(
+          lastValidPosition.current[0],
+          lastValidPosition.current[1],
+          lastValidPosition.current[2]
+        );
+        
+        // 업데이트된 정보로 인스턴스 업데이트
+        if (onUpdateInstance && instanceId) {
+          onUpdateInstance(instanceId, {
+            position: lastValidPosition.current,
+            rotation: lastValidRotation.current,
+            scale: [
+              modelRef.current?.scale.x ?? scale[0],
+              modelRef.current?.scale.y ?? scale[1],
+              modelRef.current?.scale.z ?? scale[2]
+            ]
+          });
+        }
+      } else {
+        // 충돌이 없는 경우 현재 위치와 회전으로 인스턴스 업데이트
+        if (rootRef.current) {
+          const newPosition: [number, number, number] = [
+            rootRef.current.position.x,
+            rootRef.current.position.y,
+            rootRef.current.position.z
+          ];
+          const newRotation: [number, number, number] = [
+            rootRef.current.rotation.x, 
+            rootRef.current.rotation.y, 
+            rootRef.current.rotation.z
+          ];
+          
+          if (onUpdateInstance && instanceId) {
+            onUpdateInstance(instanceId, {
+              position: newPosition,
+              rotation: newRotation,
+              scale: [
+                modelRef.current?.scale.x ?? scale[0],
+                modelRef.current?.scale.y ?? scale[1],
+                modelRef.current?.scale.z ?? scale[2]
+              ] as [number, number, number]
+            });
+          }
+        }
+      }
+      
+      // 드래그 상태 및 충돌 상태 초기화
+      setIsDragging(false);
+      setHasCollision(false);
+    }
+  };
+  
+  // 모델 복제
+  const modelClone = gltf.scene.clone();
   
   // 수동 충돌 감지 함수
   const checkCollisions = () => {
@@ -582,7 +603,7 @@ function ModelLoader({
       
       {/* 선택되고 드래그 가능하며 잠금 상태가 아닌 경우에만 TransformControls 표시 */}
       {isSelected && isDraggable && !isLocked && rootRef.current && (
-        <TransformControls
+        <CustomTransformControls
           object={transformMode === 'scale' && modelRef.current ? modelRef.current : rootRef.current}
           mode={transformMode}
           size={0.75}
@@ -590,140 +611,9 @@ function ModelLoader({
           showY={controlConfig.showY}
           showZ={controlConfig.showZ}
           camera={camera}
-          onMouseDown={() => {
-            console.log('드래그 시작');
-            setIsDragging(true);
-            
-            // 드래그 시작 시 충돌 상태 초기화
-            if (hasCollision) {
-              setHasCollision(false);
-            }
-            
-            // 드래그 시작 시 현재 위치를 기억
-            if (rootRef.current) {
-              lastValidPosition.current = [
-                rootRef.current.position.x,
-                rootRef.current.position.y,
-                rootRef.current.position.z
-              ];
-              lastValidRotation.current = [
-                rootRef.current.rotation.x,
-                rootRef.current.rotation.y,
-                rootRef.current.rotation.z
-              ];
-            }
-          }}
-          onChange={() => {
-            // 위치가 변경될 때마다 충돌 감지
-            if (transformMode === 'translate' && isDragging) {
-              checkCollisions();
-            }
-          }}
-          onMouseUp={() => {
-            console.log('드래그 종료, 충돌 상태:', hasCollision);
-
-            // 마지막으로 충돌 상태 확인
-            const isColliding = checkCollisions();
-            
-            // 스냅 가이드 라인 숨기기
-            hideSnapLine();
-            
-            if (rootRef.current && onDragEnd) {
-              // 충돌이 있는 경우, 마지막 유효 위치로 복원
-              if ((hasCollision || isColliding) && transformMode === 'translate') {
-                console.log('충돌로 인해 위치 복원:', lastValidPosition.current);
-                rootRef.current.position.set(
-                  lastValidPosition.current[0],
-                  lastValidPosition.current[1],
-                  lastValidPosition.current[2]
-                );
-                
-                // 물리 객체도 위치 복원
-                api.position.set(
-                  lastValidPosition.current[0],
-                  lastValidPosition.current[1],
-                  lastValidPosition.current[2]
-                );
-                
-                // 충돌 상태 리셋
-                setHasCollision(false);
-                
-                // 모델 색상 복원
-                if (modelRef.current) {
-                  modelRef.current.traverse((child) => {
-                    if (child instanceof Mesh && child.material) {
-                      if (Array.isArray(child.material)) {
-                        child.material.forEach(mat => {
-                          mat.transparent = false;
-                          mat.opacity = 1;
-                          mat.emissiveIntensity = 0.5;
-                          mat.emissive?.set(isSelected ? 0x222222 : 0x000000);
-                        });
-                      } else {
-                        child.material.transparent = false;
-                        child.material.opacity = 1;
-                        child.material.emissiveIntensity = 0.5;
-                        child.material.emissive?.set(isSelected ? 0x222222 : 0x000000);
-                      }
-                    }
-                  });
-                }
-                
-                // 위치 정보 이벤트 발생
-                onDragEnd(lastValidPosition.current, lastValidRotation.current, [
-                  modelRef.current?.scale.x ?? scale[0],
-                  modelRef.current?.scale.y ?? scale[1],
-                  modelRef.current?.scale.z ?? scale[2]
-                ]);
-                
-                // 업데이트된 정보로 인스턴스 업데이트
-                if (onUpdateInstance && instanceId) {
-                  onUpdateInstance(instanceId, {
-                    position: lastValidPosition.current,
-                    rotation: lastValidRotation.current,
-                    scale: [
-                      modelRef.current?.scale.x ?? scale[0],
-                      modelRef.current?.scale.y ?? scale[1],
-                      modelRef.current?.scale.z ?? scale[2]
-                    ]
-                  });
-                }
-                
-                return;
-              }
-              
-              // 충돌이 없으면 현재 위치 사용
-              const newPosition: [number, number, number] = [
-                rootRef.current.position.x,
-                rootRef.current.position.y,
-                rootRef.current.position.z
-              ];
-              
-              const newRotation: [number, number, number] = [
-                rootRef.current.rotation.x,
-                rootRef.current.rotation.y,
-                rootRef.current.rotation.z
-              ];
-              
-              const newScale: [number, number, number] = [
-                modelRef.current?.scale.x ?? scale[0],
-                modelRef.current?.scale.y ?? scale[1],
-                modelRef.current?.scale.z ?? scale[2]
-              ];
-              
-              // 충돌이 없는 경우 현재 위치를 유효한 위치로 저장
-              lastValidPosition.current = newPosition;
-              lastValidRotation.current = newRotation;
-              
-              // 물리 객체의 위치도 업데이트
-              api.position.set(newPosition[0], newPosition[1], newPosition[2]);
-              api.rotation.set(newRotation[0], newRotation[1], newRotation[2]);
-              
-              // 드래그 종료 및 이벤트 발생
-              setIsDragging(false);
-              onDragEnd(newPosition, newRotation, newScale);
-            }
-          }}
+          onMouseDown={handleMouseDown}
+          onChange={handleChange}
+          onMouseUp={handleMouseUp}
         />
       )}
       
