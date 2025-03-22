@@ -24,6 +24,8 @@ interface ModelLoaderProps {
   transformMode?: 'translate' | 'rotate' | 'scale';
   onUpdateInstance?: (instanceId: string, updates: Partial<ModelInstance>) => void;
   instanceId?: string;
+  enableSnapping?: boolean;
+  snapThreshold?: number;
 }
 
 function ModelLoader({
@@ -40,6 +42,8 @@ function ModelLoader({
   transformMode = 'translate',
   onUpdateInstance,
   instanceId,
+  enableSnapping = true,
+  snapThreshold = 1.0,
 }: ModelLoaderProps) {
   // Three.js 상태 훅
   const { camera, scene } = useThree();
@@ -350,7 +354,26 @@ function ModelLoader({
     return hasAnyCollision;
   };
   
-  // 드래그 중 위치 업데이트 및 충돌 감지
+  // 스냅 상태 저장
+  const [isSnapped, setIsSnapped] = useState(false);
+  const [snapAxis, setSnapAxis] = useState<'x' | 'z' | null>(null);
+  const snapLineRef = useRef<Mesh | null>(null);
+  
+  // 스냅 라인 생성 및 표시
+  const showSnapLine = (axis: 'x' | 'z', position: ThreeVector3) => {
+    setIsSnapped(true);
+    setSnapAxis(axis);
+    
+    // 나중에 스냅 라인 시각적 표시를 추가할 수 있음
+  };
+  
+  // 스냅 라인 숨기기
+  const hideSnapLine = () => {
+    setIsSnapped(false);
+    setSnapAxis(null);
+  };
+
+  // 드래그 중 위치 업데이트 및 충돌/스냅 감지
   useFrame(() => {
     if (rootRef.current && physicsRef.current) {
       // 물리 객체에 이름 추가
@@ -360,6 +383,26 @@ function ModelLoader({
 
       // 항상 물리 객체의 위치를 시각적 객체와 동기화
       if (transformMode === 'translate' && isDragging) {
+        // 현재 위치에서 스냅 적용
+        const currentPosition = rootRef.current.position.clone();
+        const snappedPosition = snapToNearbyObjects(currentPosition);
+        
+        // 스냅이 발생했는지 체크
+        if (!snappedPosition.equals(currentPosition)) {
+          // 스냅된 위치로 업데이트
+          rootRef.current.position.copy(snappedPosition);
+          
+          // 스냅된 축 확인
+          if (snappedPosition.x !== currentPosition.x) {
+            showSnapLine('x', snappedPosition);
+          } else if (snappedPosition.z !== currentPosition.z) {
+            showSnapLine('z', snappedPosition);
+          }
+        } else {
+          hideSnapLine();
+        }
+        
+        // 물리 객체 위치 동기화
         physicsRef.current.position.copy(rootRef.current.position);
         api.position.set(
           rootRef.current.position.x,
@@ -432,6 +475,88 @@ function ModelLoader({
     }
   });
   
+  // 스냅 기능 구현 - 가까운 벽이나 다른 가구에 정렬
+  const snapToNearbyObjects = (position: ThreeVector3): ThreeVector3 => {
+    if (!scene || !isDragging || !enableSnapping) return position;
+    
+    const snapPositions: {distance: number, position: ThreeVector3, direction: string}[] = [];
+    
+    // 현재 위치
+    const currentPos = new ThreeVector3(position.x, position.y, position.z);
+    
+    // 씬의 모든 객체를 검사
+    scene.traverse((object) => {
+      // 벽이거나 다른 모델인 경우만 처리
+      const isWall = object.name && object.name.startsWith('wall-');
+      const isOtherModel = object.name && object.name.startsWith('model-') && object.name !== modelId.current;
+      
+      if ((isWall || isOtherModel) && object.position) {
+        // 각 축별로 스냅 거리 계산
+        const xDistance = Math.abs(currentPos.x - object.position.x);
+        const zDistance = Math.abs(currentPos.z - object.position.z);
+        
+        // X축 스냅 포인트 추가
+        if (xDistance < snapThreshold) {
+          snapPositions.push({
+            distance: xDistance,
+            position: new ThreeVector3(object.position.x, currentPos.y, currentPos.z),
+            direction: 'x'
+          });
+        }
+        
+        // Z축 스냅 포인트 추가
+        if (zDistance < snapThreshold) {
+          snapPositions.push({
+            distance: zDistance,
+            position: new ThreeVector3(currentPos.x, currentPos.y, object.position.z),
+            direction: 'z'
+          });
+        }
+      }
+    });
+    
+    // 가장 가까운 스냅 포인트 찾기
+    if (snapPositions.length > 0) {
+      snapPositions.sort((a, b) => a.distance - b.distance);
+      const closestSnap = snapPositions[0];
+      
+      console.log('스냅 적용:', closestSnap.direction, '축, 거리:', closestSnap.distance);
+      return closestSnap.position;
+    }
+    
+    return position;
+  };
+  
+  // 스냅 가이드 라인 컴포넌트
+  const SnapGuide = () => {
+    const { scene } = useThree();
+    
+    // 씬의 크기에 맞게 가이드 라인 생성
+    const roomSize = 10; // 기본 방 크기
+    
+    if (!isSnapped || !snapAxis) return null;
+    
+    const position = rootRef.current?.position || new ThreeVector3();
+    
+    return (
+      <>
+        {snapAxis === 'x' && (
+          <mesh position={[position.x, 0.01, 0]} rotation={[0, 0, 0]}>
+            <planeGeometry args={[0.05, roomSize * 2]} />
+            <meshBasicMaterial color="#4285f4" transparent opacity={0.6} />
+          </mesh>
+        )}
+        
+        {snapAxis === 'z' && (
+          <mesh position={[0, 0.01, position.z]} rotation={[0, 0, 0]}>
+            <planeGeometry args={[roomSize * 2, 0.05]} />
+            <meshBasicMaterial color="#4285f4" transparent opacity={0.6} />
+          </mesh>
+        )}
+      </>
+    );
+  };
+
   return (
     <>
       <group 
@@ -499,6 +624,9 @@ function ModelLoader({
 
             // 마지막으로 충돌 상태 확인
             const isColliding = checkCollisions();
+            
+            // 스냅 가이드 라인 숨기기
+            hideSnapLine();
             
             if (rootRef.current && onDragEnd) {
               // 충돌이 있는 경우, 마지막 유효 위치로 복원
@@ -598,6 +726,9 @@ function ModelLoader({
           }}
         />
       )}
+      
+      {/* 스냅 가이드 라인 */}
+      {isDragging && <SnapGuide />}
     </>
   );
 }

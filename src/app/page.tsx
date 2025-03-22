@@ -185,6 +185,8 @@ export default function EditorPage() {
             const { updateInstance } = useEditorStore.getState();
             updateInstance(id, updates);
           }}
+          enableSnapping={true}
+          snapThreshold={0.8}
         />
       );
     });
