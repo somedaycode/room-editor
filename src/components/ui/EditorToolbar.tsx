@@ -66,16 +66,10 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             )}
-            {editMode === 'scale' && (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-              </svg>
-            )}
             <span className="text-sm font-medium">
               {editMode === 'combined' && '이동 및 회전'}
               {editMode === 'translate' && '이동'}
               {editMode === 'rotate' && '회전'}
-              {editMode === 'scale' && '크기 조절'}
             </span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -127,20 +121,6 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                   회전
-                </button>
-                <button 
-                  className={`w-full px-4 py-2 text-left text-sm ${
-                    editMode === 'scale' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-                  } flex items-center`}
-                  onClick={() => {
-                    setEditMode('scale');
-                    setIsEditMenuOpen(false);
-                  }}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                  </svg>
-                  크기 조절
                 </button>
               </div>
             </div>

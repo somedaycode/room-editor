@@ -38,8 +38,8 @@ export interface EditorState {
   selectInstance: (id: string | null) => void;
   
   // 편집 모드
-  editMode: 'translate' | 'rotate' | 'scale' | 'combined';
-  setEditMode: (mode: 'translate' | 'rotate' | 'scale' | 'combined') => void;
+  editMode: 'translate' | 'rotate' | 'combined';
+  setEditMode: (mode: 'translate' | 'rotate' | 'combined') => void;
   
   // 씬 관련
   roomDimensions: { width: number; height: number; length: number };
@@ -127,7 +127,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   
   // 편집 모드
   editMode: 'combined',
-  setEditMode: (mode: 'translate' | 'rotate' | 'scale' | 'combined') => set({ editMode: mode }),
+  setEditMode: (mode: 'translate' | 'rotate' | 'combined') => set({ editMode: mode }),
   
   // 씬 관련
   roomDimensions: { width: 10, height: 3, length: 10 },
