@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useLoader, useFrame } from '@react-three/fiber';
 import { GLTFLoader } from 'three-stdlib';
 import { DRACOLoader } from 'three-stdlib';
 import { useBox } from '@react-three/cannon';
 import { Mesh, Group, Vector3 as ThreeVector3 } from 'three';
-import { ModelInstance } from '../../types';
+import { ModelInstance, Vector3 } from '../../types';
+import { TransformControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 
 interface ModelLoaderProps {
   modelPath: string;
@@ -18,10 +20,11 @@ interface ModelLoaderProps {
   isSelected?: boolean;
   isLocked?: boolean;
   onClick?: () => void;
-  modelInstance?: ModelInstance;
+  onDragEnd?: (position: [number, number, number], rotation: [number, number, number], scale?: [number, number, number]) => void;
+  transformMode?: 'translate' | 'rotate' | 'scale';
 }
 
-export default function ModelLoader({
+function ModelLoader({
   modelPath,
   position = [0, 0, 0],
   rotation = [0, 0, 0],
@@ -31,8 +34,12 @@ export default function ModelLoader({
   isSelected = false,
   isLocked = false,
   onClick,
-  modelInstance,
+  onDragEnd,
+  transformMode = 'translate',
 }: ModelLoaderProps) {
+  // Three.js 상태 훅
+  const { camera } = useThree();
+  
   // 실제 모델 로딩
   const gltf = useLoader(GLTFLoader, modelPath, (loader) => {
     const dracoLoader = new DRACOLoader();
@@ -41,15 +48,17 @@ export default function ModelLoader({
   });
 
   const modelRef = useRef<Group>(null);
+  const rootRef = useRef<Group>(null);
   const [modelBoundingBox, setModelBoundingBox] = useState<[number, number, number]>([1, 1, 1]);
+  const [isDragging, setIsDragging] = useState(false);
   
-  // 물리 효과 적용
+  // 물리 효과 적용 (isDraggable이 false인 경우만 물리 효과 적용)
   const [physicsRef] = useBox(() => ({
     args: modelBoundingBox,
     mass: 1,
     position,
     rotation,
-    type: isDraggable ? 'Dynamic' : 'Static',
+    type: 'Static', // 물리 시스템에 의한 드래그는 비활성화
   }));
   
   // 모델 로드 후 효과
@@ -82,12 +91,18 @@ export default function ModelLoader({
         maxSize.z * scale[2]
       ]);
       
+      // 초기 위치 및 회전 설정
+      if (rootRef.current) {
+        rootRef.current.position.set(position[0], position[1], position[2]);
+        rootRef.current.rotation.set(rotation[0], rotation[1], rotation[2]);
+      }
+      
       // 모델 로드 콜백
       if (onLoad) {
         onLoad(modelRef.current);
       }
     }
-  }, [gltf, scale, onLoad]);
+  }, [gltf, scale, onLoad, position, rotation]);
   
   // 선택 효과 (하이라이트)
   useEffect(() => {
@@ -119,33 +134,138 @@ export default function ModelLoader({
     }
   }, [isSelected]);
   
-  // 모델 복제 및 위치 동기화
+  // TransformControls 이벤트 처리
+  useEffect(() => {
+    if (isSelected && isDraggable && !isLocked && rootRef.current) {
+      const handleDragStart = () => {
+        setIsDragging(true);
+      };
+      
+      const handleDragEnd = () => {
+        setIsDragging(false);
+        
+        if (rootRef.current && onDragEnd) {
+          const newPosition: [number, number, number] = [
+            rootRef.current.position.x,
+            rootRef.current.position.y,
+            rootRef.current.position.z
+          ];
+          
+          const newRotation: [number, number, number] = [
+            rootRef.current.rotation.x,
+            rootRef.current.rotation.y,
+            rootRef.current.rotation.z
+          ];
+          
+          const newScale: [number, number, number] = [
+            modelRef.current?.scale.x ?? scale[0],
+            modelRef.current?.scale.y ?? scale[1],
+            modelRef.current?.scale.z ?? scale[2]
+          ];
+          
+          onDragEnd(newPosition, newRotation, newScale);
+        }
+      };
+      
+      // 이벤트 리스너는 주로 TransformControls 내부에서 처리됨
+      
+      return () => {
+        // 이벤트 리스너 제거
+      };
+    }
+  }, [isSelected, isDraggable, isLocked, onDragEnd, scale]);
+  
+  // 모델 복제
   const modelClone = gltf.scene.clone();
   
-  // 물리 객체와 시각적 모델 동기화
-  useFrame(() => {
-    if (physicsRef.current && modelRef.current) {
-      const position = physicsRef.current.position;
-      const quaternion = physicsRef.current.quaternion;
-      
-      modelRef.current.position.copy(position);
-      modelRef.current.quaternion.copy(quaternion);
+  // 변환 모드에 따른 설정 구성
+  const getTransformControlsConfig = () => {
+    switch (transformMode) {
+      case 'translate':
+        return { 
+          showX: true, 
+          showY: false, // Y축(높이)은 비활성화하면 바닥에 붙인 상태로 드래그 가능 
+          showZ: true 
+        };
+      case 'rotate':
+        return { 
+          showX: false, 
+          showY: true, // 회전은 Y축만 사용하는 것이 가구 배치에 자연스러움
+          showZ: false 
+        };
+      case 'scale':
+        return { 
+          showX: true, 
+          showY: true, 
+          showZ: true 
+        };
+      default:
+        return { 
+          showX: true, 
+          showY: false, 
+          showZ: true 
+        };
     }
-  });
-
+  };
+  
+  const controlConfig = getTransformControlsConfig();
+  
   return (
-    <group 
-      ref={physicsRef}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (onClick) onClick();
-      }}
-    >
-      <primitive 
-        ref={modelRef}
-        object={modelClone} 
-        scale={scale}
-      />
-    </group>
+    <>
+      <group 
+        ref={rootRef}
+        position={position}
+        rotation={rotation}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onClick) onClick();
+        }}
+      >
+        <primitive 
+          ref={modelRef}
+          object={modelClone} 
+          scale={scale}
+        />
+      </group>
+      
+      {/* 선택되고 드래그 가능하며 잠금 상태가 아닌 경우에만 TransformControls 표시 */}
+      {isSelected && isDraggable && !isLocked && rootRef.current && (
+        <TransformControls
+          object={transformMode === 'scale' && modelRef.current ? modelRef.current : rootRef.current}
+          mode={transformMode}
+          size={0.75}
+          showX={controlConfig.showX}
+          showY={controlConfig.showY}
+          showZ={controlConfig.showZ}
+          camera={camera}
+          onMouseUp={() => {
+            if (rootRef.current && onDragEnd) {
+              const newPosition: [number, number, number] = [
+                rootRef.current.position.x,
+                rootRef.current.position.y,
+                rootRef.current.position.z
+              ];
+              
+              const newRotation: [number, number, number] = [
+                rootRef.current.rotation.x,
+                rootRef.current.rotation.y,
+                rootRef.current.rotation.z
+              ];
+              
+              const newScale: [number, number, number] = [
+                modelRef.current?.scale.x ?? scale[0],
+                modelRef.current?.scale.y ?? scale[1],
+                modelRef.current?.scale.z ?? scale[2]
+              ];
+              
+              onDragEnd(newPosition, newRotation, newScale);
+            }
+          }}
+        />
+      )}
+    </>
   );
-} 
+}
+
+// React.memo를 사용하여 불필요한 리렌더링 방지
+export default memo(ModelLoader); 

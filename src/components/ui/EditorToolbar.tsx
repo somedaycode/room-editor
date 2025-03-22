@@ -74,6 +74,20 @@ export default function EditorToolbar({ onDelete, onDuplicate }: EditorToolbarPr
           </button>
         </div>
         
+        {/* 회전 버튼 */}
+        <button
+          className={`px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 ${
+            !selectedInstanceId ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          onClick={handleRotate90}
+          disabled={!selectedInstanceId}
+          title="90도 회전"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        </button>
+        
         {/* 복제 및 삭제 버튼 */}
         <button
           className={`px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 ${

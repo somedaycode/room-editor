@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import XRCanvas from '../components/xr/XRCanvas';
 import Room from '../components/xr/Room';
 import ModelLoader from '../components/xr/ModelLoader';
@@ -83,6 +83,7 @@ export default function EditorPage() {
     models,
     instances,
     selectedInstanceId,
+    editMode,
     setModels,
     setInstances,
     addInstance,
@@ -93,47 +94,110 @@ export default function EditorPage() {
   } = useEditorStore();
 
   // 첫 렌더링 시 데모 데이터 설정
-  useState(() => {
+  useEffect(() => {
     setModels(demoModels);
     setInstances(initialInstances);
-  });
+  }, [setModels, setInstances]);
 
-  // 선택된 인스턴스 찾기
-  const selectedInstance = instances.find(inst => inst.id === selectedInstanceId);
+  // 선택된 인스턴스와 모델 찾기 (메모이제이션으로 불필요한 계산 방지)
+  const selectedInstance = useMemo(() => {
+    return instances.find(inst => inst.id === selectedInstanceId);
+  }, [instances, selectedInstanceId]);
   
-  // 선택된 인스턴스의 모델 찾기
-  const selectedModel = selectedInstance 
-    ? models.find(model => model.id === selectedInstance.modelId) 
-    : undefined;
+  const selectedModel = useMemo(() => {
+    if (!selectedInstance) return undefined;
+    return models.find(model => model.id === selectedInstance.modelId);
+  }, [models, selectedInstance]);
+
+  // 콜백 함수 메모이제이션
+  const handleAddModel = useCallback((modelId: string) => {
+    // 선택된 모델 찾기
+    const model = models.find(m => m.id === modelId);
+    if (model) {
+      // 모델 인스턴스 생성 및 추가
+      addInstance({
+        modelId,
+        name: `${model.name} ${instances.filter(i => i.modelId === modelId).length + 1}`,
+        position: [0, 0.01, 0],
+        rotation: [0, 0, 0],
+        scale: model.defaultScale || [1, 1, 1],
+        isVisible: true,
+        isLocked: false
+      });
+    }
+  }, [models, instances, addInstance]);
+
+  const handleDuplicate = useCallback(() => {
+    if (selectedInstanceId) {
+      duplicateInstance(selectedInstanceId);
+    }
+  }, [selectedInstanceId, duplicateInstance]);
+
+  const handleDelete = useCallback(() => {
+    if (selectedInstanceId) {
+      deleteInstance(selectedInstanceId);
+    }
+  }, [selectedInstanceId, deleteInstance]);
+
+  const handleUpdateProperty = useCallback((property: keyof ModelInstance, value: any) => {
+    if (selectedInstanceId) {
+      updateInstanceProperty(selectedInstanceId, property, value);
+    }
+  }, [selectedInstanceId, updateInstanceProperty]);
+
+  const handleSelectInstance = useCallback((id: string) => {
+    selectInstance(id);
+  }, [selectInstance]);
+
+  // 드래그 앤 드롭 완료 핸들러
+  const handleDragEnd = useCallback((instanceId: string, position: [number, number, number], rotation: [number, number, number], scale?: [number, number, number]) => {
+    // 모델 인스턴스의 위치와 회전 업데이트
+    updateInstanceProperty(instanceId, 'position' as keyof ModelInstance, position);
+    updateInstanceProperty(instanceId, 'rotation' as keyof ModelInstance, rotation);
+    
+    // scale이 있으면 업데이트
+    if (scale) {
+      updateInstanceProperty(instanceId, 'scale' as keyof ModelInstance, scale);
+    }
+  }, [updateInstanceProperty]);
+
+  // 인스턴스 렌더링을 메모이제이션
+  const renderedInstances = useMemo(() => {
+    return instances.map(instance => {
+      const model = models.find(m => m.id === instance.modelId);
+      if (!model || !instance.isVisible) return null;
+      
+      return (
+        <ModelLoader
+          key={`model-${instance.id}`}
+          modelPath={model.modelPath}
+          position={instance.position}
+          rotation={instance.rotation}
+          scale={instance.scale}
+          isSelected={instance.id === selectedInstanceId}
+          isLocked={instance.isLocked}
+          isDraggable={true}
+          onClick={() => handleSelectInstance(instance.id)}
+          onDragEnd={(position, rotation, scale) => handleDragEnd(instance.id, position, rotation, scale)}
+          transformMode={editMode}
+        />
+      );
+    });
+  }, [instances, models, selectedInstanceId, handleSelectInstance, handleDragEnd, editMode]);
 
   return (
     <div className="flex flex-col h-screen">
       {/* 툴바 */}
       <EditorToolbar
-        onDuplicate={() => selectedInstanceId && duplicateInstance(selectedInstanceId)}
-        onDelete={() => selectedInstanceId && deleteInstance(selectedInstanceId)}
+        onDuplicate={handleDuplicate}
+        onDelete={handleDelete}
       />
       
       <div className="flex flex-1 overflow-hidden">
         {/* 모델 사이드바 */}
         <ModelsSidebar 
           models={models} 
-          onAddModel={(modelId) => {
-            // 선택된 모델 찾기
-            const model = models.find(m => m.id === modelId);
-            if (model) {
-              // 모델 인스턴스 생성 및 추가
-              addInstance({
-                modelId,
-                name: `${model.name} ${instances.filter(i => i.modelId === modelId).length + 1}`,
-                position: [0, 0.01, 0],
-                rotation: [0, 0, 0],
-                scale: model.defaultScale || [1, 1, 1],
-                isVisible: true,
-                isLocked: false
-              });
-            }
-          }}
+          onAddModel={handleAddModel}
         />
         
         {/* 메인 3D 뷰 */}
@@ -145,6 +209,7 @@ export default function EditorPage() {
             showSky={false}
           >
             <Room 
+              key="main-room"
               width={9.1} 
               height={3} 
               length={9.1} 
@@ -154,24 +219,7 @@ export default function EditorPage() {
               hasCeiling={false} 
             />
             
-            {instances.map(instance => {
-              const model = models.find(m => m.id === instance.modelId);
-              if (!model || !instance.isVisible) return null;
-              
-              return (
-                <ModelLoader
-                  key={instance.id}
-                  modelPath={model.modelPath}
-                  position={instance.position}
-                  rotation={instance.rotation}
-                  scale={instance.scale}
-                  isSelected={instance.id === selectedInstanceId}
-                  isLocked={instance.isLocked}
-                  isDraggable={true}
-                  onClick={() => selectInstance(instance.id)}
-                />
-              );
-            })}
+            {renderedInstances}
           </XRCanvas>
         </div>
         
@@ -180,9 +228,7 @@ export default function EditorPage() {
           <PropertiesPanel
             instance={selectedInstance}
             model={selectedModel}
-            onUpdateProperty={(property, value) => {
-              updateInstanceProperty(selectedInstance.id, property, value);
-            }}
+            onUpdateProperty={handleUpdateProperty}
           />
         )}
       </div>
