@@ -118,7 +118,7 @@ export default function EditorPage() {
       addInstance({
         modelId,
         name: `${model.name} ${instances.filter(i => i.modelId === modelId).length + 1}`,
-        position: [0, 0.01, 0],
+        position: [0, 0.2, 0],
         rotation: [0, 0, 0],
         scale: model.defaultScale || [1, 1, 1],
         isVisible: true,
@@ -180,6 +180,11 @@ export default function EditorPage() {
           onClick={() => handleSelectInstance(instance.id)}
           onDragEnd={(position, rotation, scale) => handleDragEnd(instance.id, position, rotation, scale)}
           transformMode={editMode}
+          instanceId={instance.id}
+          onUpdateInstance={(id, updates) => {
+            const { updateInstance } = useEditorStore.getState();
+            updateInstance(id, updates);
+          }}
         />
       );
     });
@@ -207,6 +212,7 @@ export default function EditorPage() {
             environmentPreset="studio"
             showGrid={false}
             showSky={false}
+            enablePhysics={true}
           >
             <Room 
               key="main-room"

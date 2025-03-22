@@ -90,8 +90,28 @@ export default function XRCanvas({
           )}
           
           {enablePhysics ? (
-            <Physics gravity={[0, -9.8, 0]}>
-              {children}
+            <Physics 
+              gravity={[0, -9.8, 0]}
+              defaultContactMaterial={{
+                friction: 0.2,
+                restitution: 0.1,
+                contactEquationStiffness: 1e9,
+                contactEquationRelaxation: 1,
+                frictionEquationStiffness: 1e9,
+                frictionEquationRelaxation: 1,
+              }}
+              broadphase="SAP"
+              iterations={20}
+              tolerance={0.0001}
+              size={100}
+              allowSleep={false}
+            >
+              {process.env.NODE_ENV === 'development' && (
+                <Debug color="black" scale={1.1}>
+                  {children}
+                </Debug>
+              )}
+              {process.env.NODE_ENV !== 'development' && children}
             </Physics>
           ) : (
             children

@@ -41,6 +41,15 @@ const Wall = ({
     args: size,
     position,
     type: 'Static',
+    mass: 0,
+    collisionFilterGroup: 1, // 벽은 그룹 1에 속함
+    collisionFilterMask: 1,  // 그룹 1과만 충돌 감지 (모델은 그룹 2이므로 충돌하지 않음)
+    onCollideBegin: (e) => {
+      console.log('벽과 충돌 시작:', e.body?.name, e.target?.name);
+    },
+    onCollideEnd: (e) => {
+      console.log('벽과 충돌 종료:', e.body?.name);
+    },
   }));
 
   return (
@@ -49,6 +58,7 @@ const Wall = ({
       position={position}
       castShadow
       receiveShadow
+      name={`wall-${position[0]}-${position[1]}-${position[2]}`}
     >
       <boxGeometry args={size} />
       <meshStandardMaterial
@@ -76,8 +86,16 @@ export default function Room({
   const [floorRef] = useBox(() => ({
     args: [width, 0.1, length],
     position: [0, -0.05, 0],
+    rotation: [0, 0, 0],
     type: 'Static',
-    rotation: [0, 0, 0], // 바닥은 회전하지 않음
+    collisionFilterGroup: 1, // 바닥은 그룹 1에 속함
+    collisionFilterMask: 1,  // 그룹 1과만 충돌 감지 (모델은 그룹 2이므로 충돌하지 않음)
+    onCollideBegin: (e) => {
+      console.log('바닥과 충돌 시작:', e.body?.name);
+    },
+    onCollideEnd: (e) => {
+      console.log('바닥과 충돌 종료:', e.body?.name);
+    },
   }));
 
   // 씬 크기에 맞게 카메라 위치 조정
@@ -101,6 +119,7 @@ export default function Room({
         ref={floorRef} 
         position={[0, -0.05, 0]} 
         receiveShadow
+        name="floor-main"
       >
         <boxGeometry args={[width, 0.1, length]} />
         <meshStandardMaterial 
